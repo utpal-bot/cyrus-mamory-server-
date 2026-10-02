@@ -1,0 +1,13 @@
+{
+  "name": "cyrus-cloud-brain",
+  "version": "1.0.0",
+  "description": "Cyrus Personal AI Cloud Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}
