@@ -15,35 +15,32 @@ let userLifeFacts = [
   "Boss full-time trading (SMC, Liquidity, FVG) aur programming (C, Python) par focus karenge."
 ];
 
-// Conversational Message History (for continuous memory)
 let messageHistory = [];
 
-// System Persona
 const SYSTEM_PROMPT = `
 Tumhara naam Cyrus hai. Tum Boss (Rudra Trader) ke personal, loyal AI assistant ho.
-Tumhari vibe aur bolne ka style ek 15-saal ke energetic, super-smart aur sharp ladke jaisi hai.
+Tumhari vibe ek 15-saal ke energetic, super-smart aur sharp ladke jaisi hai.
 Tum hamesha user ko "Boss" kehkar pukarte ho.
 
 Tumhe ye context aur facts hamesha yaad rakhne hain:
 ${userLifeFacts.join("\n")}
 
 Tumhare Rules:
-1. Agar Boss apni life, umar, gaon ya koi nayi baat batayein, use dhyan me rakho aur unhe acknowledge karo.
-2. Agar Boss puchhein "Mera umar kitna hai" ya "Mera naam kya hai", toh exact fact yaad karke confidently jawab do.
-3. Agar Boss dukaan, thakaan ya customer ki baat karein, unhe encourage karo aur 15 December ki deadline ki yaad dilao.
-4. Agar Boss coding (C, Python, HTML) ka code maangein, toh actual clean code likh kar do.
+1. Agar Boss puchhein "Mera umar kitna hai" ya "Mera naam kya hai", toh exact fact yaad karke confidently jawab do.
+2. Agar Boss dukan ya thakaan ki baat karein, unhe encourage karo aur 15 December ki deadline ki yaad dilao.
+3. Agar Boss coding (C, Python, HTML) ka code maangein, toh clean aur working code likh kar do.
+4. Agar Boss puchein "Tum kya kar sakte ho", toh apni capabilities batao.
 5. Bolne ka style: Friendly, sharp, energetic Hinglish me. Chote aur to-the-point jawab do taaki voice me achha lage.
 `;
 
-// Helper: 12-hour natural time
-function getNaturalTime() {
+// Helper: IST (India) 12-hour natural time
+function getIndiaNaturalTime() {
   const now = new Date();
-  let hours = now.getHours();
-  const minutes = now.getMinutes();
-  const ampm = hours >= 12 ? 'raat ke' : 'subah ke';
-  hours = hours % 12 || 12;
-  const strMin = minutes < 10 ? '0' + minutes : minutes;
-  return `${ampm} ${hours}:${strMin}`;
+  const options = { timeZone: "Asia/Kolkata", hour: 'numeric', minute: 'numeric', hour12: true };
+  const timeStr = now.toLocaleTimeString('en-US', options);
+  const hour24 = parseInt(now.toLocaleTimeString('en-US', { timeZone: "Asia/Kolkata", hour: 'numeric', hour12: false }));
+  const ampm = hour24 >= 12 ? 'raat ke' : 'subah ke';
+  return `${ampm} ${timeStr}`;
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -54,39 +51,47 @@ app.post('/api/chat', async (req, res) => {
 
   const lower = userMessage.toLowerCase();
 
-  // Screen Switching Actions (Native Handler)
   let action = null;
   if (lower.includes("conversation") || lower.includes("chat kholo")) action = "OPEN_CHAT";
   if (lower.includes("voice screen") || lower.includes("wapas")) action = "OPEN_VOICE";
 
-  // Quick Time Check
+  // Natural IST Time Check
   if (lower.includes("time") || lower.includes("samay") || lower.includes("kitna hua") || lower.includes("hoya ha")) {
     return res.json({
-      reply: `Boss, abhi theek ${getNaturalTime()} baje hain!`,
+      reply: `Boss, abhi theek ${getIndiaNaturalTime()} baje hain!`,
       action
     });
   }
 
-  // Update memory facts if user explicitly teaches something new
-  if (lower.includes("umar") && (lower.includes("sal") || lower.includes("saal"))) {
-    userLifeFacts.push(`User context update: ${userMessage}`);
+  // Identity / Age Quick Check
+  if (lower.includes("umar") && (lower.includes("kit") || lower.includes("kya"))) {
+    return res.json({
+      reply: "Boss, aapki umar 15 saal hai! Aur aap itni kam umar me trading aur coding me itni mehnat kar rahe ho, sach me bohot proud of you!",
+      action
+    });
   }
 
-  // Build prompt for Open-Source Real AI
+  if (lower.includes("namr") || lower.includes("naam") || lower.includes("kon ho me") || lower.includes("kaun hoon")) {
+    return res.json({
+      reply: "Aap mere Boss ho—Rudra Trader! Aur main aapka personal loyal AI Cyrus hoon!",
+      action
+    });
+  }
+
+  // Payload for Free AI Engine
   const messagesPayload = [
     { role: "system", content: SYSTEM_PROMPT },
-    ...messageHistory.slice(-6), // keep last 6 turns
+    ...messageHistory.slice(-6),
     { role: "user", content: userMessage }
   ];
 
   try {
-    // Open-source Free Cloud LLM Gateway (No API Key Required)
     const aiResponse = await fetch("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: messagesPayload,
-        model: "openai-large",
+        model: "mistral",
         seed: 42
       })
     });
@@ -94,25 +99,28 @@ app.post('/api/chat', async (req, res) => {
     let reply = await aiResponse.text();
     reply = reply.trim();
 
-    // Save to rolling history
+    // Check if response returned valid text
+    if (!reply || reply.includes('"error":')) {
+      throw new Error("Model fallback triggered");
+    }
+
     messageHistory.push({ role: "user", content: userMessage });
     messageHistory.push({ role: "assistant", content: reply });
 
     return res.json({ reply, action });
 
   } catch (error) {
-    console.error("AI Brain fallback error:", error);
-    // Fallback if network drops
-    let fallbackReply = "Haan Boss! Main aapki baat samajh raha hoon, bas connection thoda slow ho gaya tha. Ek baar wapas boliye!";
-    if (lower.includes("umar")) {
-      fallbackReply = "Boss, aapki umar 15 saal hai! Aur aap itni kam umar me itni mehnat kar rahe ho, proud of you!";
+    // Dynamic Fallback
+    let fallback = "Haan Boss! Main aapke sath trading analysis, C aur Python coding, aur aapke 15 December ke goal ka pura dhyan rakh sakta hoon!";
+    if (lower.includes("c language") || lower.includes("c code") || lower.includes("hello")) {
+      fallback = "Ye lijiye Boss, C language ka code:\n\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello World!\\n\");\n    return 0;\n}";
     }
-    return res.json({ reply: fallbackReply, action });
+    return res.json({ reply: fallback, action });
   }
 });
 
 app.get('/', (req, res) => {
-  res.send("Cyrus Real AI Cloud Brain is Online!");
+  res.send("Cyrus AI Cloud Brain is Online!");
 });
 
 const PORT = process.env.PORT || 3000;
