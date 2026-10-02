@@ -6,34 +6,18 @@ app.use(cors());
 app.use(express.json());
 
 // Persistent Life & Context Memory
-let userLifeFacts = [
-  "Boss ka naam Rudra Trader hai.",
-  "Boss ki umar 15 saal hai.",
-  "Boss Balurghat me rehte hain.",
-  "Boss retail clothing dukan me kaam karte hain.",
-  "Boss ka main target 15 December hai jiske baad wo dukan ka kaam chhod denge.",
-  "Boss full-time trading (SMC, Liquidity, FVG) aur programming (C, Python) par focus karenge."
-];
+const userProfile = {
+  name: "Rudra Trader",
+  age: "15 saal",
+  city: "Balurghat",
+  job: "Retail clothing store",
+  deadline: "15 December",
+  focus: "Full-time SMC/FVG Trading aur C/Python Programming"
+};
 
-let messageHistory = [];
+let conversationContext = [];
 
-const SYSTEM_PROMPT = `
-Tumhara naam Cyrus hai. Tum Boss (Rudra Trader) ke personal, loyal AI assistant ho.
-Tumhari vibe ek 15-saal ke energetic, super-smart aur sharp ladke jaisi hai.
-Tum hamesha user ko "Boss" kehkar pukarte ho.
-
-Tumhe ye context aur facts hamesha yaad rakhne hain:
-${userLifeFacts.join("\n")}
-
-Tumhare Rules:
-1. Agar Boss puchhein "Mera umar kitna hai" ya "Mera naam kya hai", toh exact fact yaad karke confidently jawab do.
-2. Agar Boss dukan ya thakaan ki baat karein, unhe encourage karo aur 15 December ki deadline ki yaad dilao.
-3. Agar Boss coding (C, Python, HTML) ka code maangein, toh clean aur working code likh kar do.
-4. Agar Boss puchein "Tum kya kar sakte ho", toh apni capabilities batao.
-5. Bolne ka style: Friendly, sharp, energetic Hinglish me. Chote aur to-the-point jawab do taaki voice me achha lage.
-`;
-
-// Helper: IST (India) 12-hour natural time
+// Helper: India (IST) 12-hour Natural Time
 function getIndiaNaturalTime() {
   const now = new Date();
   const options = { timeZone: "Asia/Kolkata", hour: 'numeric', minute: 'numeric', hour12: true };
@@ -51,11 +35,12 @@ app.post('/api/chat', async (req, res) => {
 
   const lower = userMessage.toLowerCase();
 
+  // Screen Actions
   let action = null;
   if (lower.includes("conversation") || lower.includes("chat kholo")) action = "OPEN_CHAT";
   if (lower.includes("voice screen") || lower.includes("wapas")) action = "OPEN_VOICE";
 
-  // Natural IST Time Check
+  // 1. Time Check (Exact IST)
   if (lower.includes("time") || lower.includes("samay") || lower.includes("kitna hua") || lower.includes("hoya ha")) {
     return res.json({
       reply: `Boss, abhi theek ${getIndiaNaturalTime()} baje hain!`,
@@ -63,57 +48,62 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
-  // Identity / Age Quick Check
-  if (lower.includes("umar") && (lower.includes("kit") || lower.includes("kya"))) {
-    return res.json({
-      reply: "Boss, aapki umar 15 saal hai! Aur aap itni kam umar me trading aur coding me itni mehnat kar rahe ho, sach me bohot proud of you!",
-      action
-    });
-  }
-
+  // 2. Identity Check (Name)
   if (lower.includes("namr") || lower.includes("naam") || lower.includes("kon ho me") || lower.includes("kaun hoon")) {
     return res.json({
-      reply: "Aap mere Boss ho—Rudra Trader! Aur main aapka personal loyal AI Cyrus hoon!",
+      reply: `Aap mere Boss ho—${userProfile.name}! Aur main aapka personal agent Cyrus hoon!`,
       action
     });
   }
 
-  // Payload for Free AI Engine
-  const messagesPayload = [
-    { role: "system", content: SYSTEM_PROMPT },
-    ...messageHistory.slice(-6),
-    { role: "user", content: userMessage }
-  ];
+  // 3. Age Check
+  if (lower.includes("umar") && (lower.includes("kit") || lower.includes("kya"))) {
+    return res.json({
+      reply: `Boss, aapki umar ${userProfile.age} hai! Aur itni kam umar me trading aur programming par itna focus, sach me lajawab hai!`,
+      action
+    });
+  }
 
+  // 4. Stress / Mood Relief
+  if (lower.includes("dimag kharab") || lower.includes("gussa") || lower.includes("thak gaya") || lower.includes("paresan")) {
+    return res.json({
+      reply: `Arrey Boss, deep breath lo, gussa mat hoiye! Main hamesha aapke sath hoon. Yaad rakhiye hamara ultimate target ${userProfile.deadline} hai—yeh dukan aur daily hustle temporary hai, aage pura market aur code hum dominate karenge!`,
+      action
+    });
+  }
+
+  // 5. Code Generation (C / Python)
+  if (lower.includes("c language") || lower.includes("c me hello") || lower.includes("c code")) {
+    return res.json({
+      reply: "Ye lijiye Boss, C language ka clean working code:\n\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello World!\\n\");\n    return 0;\n}",
+      action
+    });
+  }
+
+  // 6. Direct Text LLM Engine (Clean Text Output, No JSON brackets)
   try {
-    const aiResponse = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: messagesPayload,
-        model: "mistral",
-        seed: 42
-      })
+    const promptInstructions = `User: Rudra Trader (Boss), 15-year-old trader and programmer. Cyrus: A sharp, loyal 15-year-old male assistant who speaks energetic Hinglish and calls user Boss. Query: "${userMessage}". Reply in 1-2 sharp lines as Cyrus:`;
+
+    const encodedPrompt = encodeURIComponent(promptInstructions);
+    const aiResponse = await fetch(`https://text.pollinations.ai/${encodedPrompt}?model=mistral&seed=42`, {
+      method: "GET"
     });
 
     let reply = await aiResponse.text();
-    reply = reply.trim();
+    reply = (reply || "").trim();
 
-    // Check if response returned valid text
-    if (!reply || reply.includes('"error":')) {
-      throw new Error("Model fallback triggered");
+    // Agar reply me brackets ya error aaye toh use clean karein
+    if (!reply || reply.startsWith("{") || reply.includes('"error":')) {
+      throw new Error("Invalid format received");
     }
-
-    messageHistory.push({ role: "user", content: userMessage });
-    messageHistory.push({ role: "assistant", content: reply });
 
     return res.json({ reply, action });
 
   } catch (error) {
-    // Dynamic Fallback
-    let fallback = "Haan Boss! Main aapke sath trading analysis, C aur Python coding, aur aapke 15 December ke goal ka pura dhyan rakh sakta hoon!";
-    if (lower.includes("c language") || lower.includes("c code") || lower.includes("hello")) {
-      fallback = "Ye lijiye Boss, C language ka code:\n\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello World!\\n\");\n    return 0;\n}";
+    // Dynamic context-aware fallback
+    let fallback = "Haan Boss! Main har waqt aapke sath hoon, chahe market analysis ho, coding ho ya koi bhi planning. Bataiye aage kya karna hai!";
+    if (lower.includes("aur kya") || lower.includes("kous nahi")) {
+      fallback = "Boss, main aapke sath live chart setups discuss kar sakta hoon, C aur Python me code likh kar de sakta hoon, aur aapki nayi planning yaad rakh sakta hoon!";
     }
     return res.json({ reply: fallback, action });
   }
