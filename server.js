@@ -15,9 +15,9 @@ const userProfile = {
   focus: "Full-time SMC/FVG Trading aur C/Python Programming"
 };
 
-let conversationContext = [];
+let conversationHistory = [];
 
-// Helper: India (IST) 12-hour Natural Time
+// Helper: IST 12-hour Natural Time
 function getIndiaNaturalTime() {
   const now = new Date();
   const options = { timeZone: "Asia/Kolkata", hour: 'numeric', minute: 'numeric', hour12: true };
@@ -34,13 +34,13 @@ app.post('/api/chat', async (req, res) => {
   }
 
   const lower = userMessage.toLowerCase();
-
-  // Screen Actions
   let action = null;
+
+  // Screen Controls
   if (lower.includes("conversation") || lower.includes("chat kholo")) action = "OPEN_CHAT";
   if (lower.includes("voice screen") || lower.includes("wapas")) action = "OPEN_VOICE";
 
-  // 1. Time Check (Exact IST)
+  // 1. Time
   if (lower.includes("time") || lower.includes("samay") || lower.includes("kitna hua") || lower.includes("hoya ha")) {
     return res.json({
       reply: `Boss, abhi theek ${getIndiaNaturalTime()} baje hain!`,
@@ -48,69 +48,91 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
-  // 2. Identity Check (Name)
-  if (lower.includes("namr") || lower.includes("naam") || lower.includes("kon ho me") || lower.includes("kaun hoon")) {
+  // 2. Name & Identity
+  if (lower.includes("namr") || lower.includes("naam") || lower.includes("kon ho me") || lower.includes("kaun hoon") || lower.includes("mara name")) {
     return res.json({
-      reply: `Aap mere Boss ho—${userProfile.name}! Aur main aapka personal agent Cyrus hoon!`,
+      reply: `Aap mere Boss ho—${userProfile.name}! Aur main aapka personal loyal agent Cyrus hoon!`,
       action
     });
   }
 
-  // 3. Age Check
-  if (lower.includes("umar") && (lower.includes("kit") || lower.includes("kya"))) {
+  // 3. Age
+  if (lower.includes("umar") && (lower.includes("kit") || lower.includes("kya") || lower.includes("sal") || lower.includes("saal"))) {
     return res.json({
-      reply: `Boss, aapki umar ${userProfile.age} hai! Aur itni kam umar me trading aur programming par itna focus, sach me lajawab hai!`,
+      reply: `Boss, aapki umar ${userProfile.age} hai! Aur itni kam umar me trading aur programming ka itna bada vision, sach me lajawab hai!`,
       action
     });
   }
 
-  // 4. Stress / Mood Relief
-  if (lower.includes("dimag kharab") || lower.includes("gussa") || lower.includes("thak gaya") || lower.includes("paresan")) {
+  // 4. Greetings
+  if (lower === "hii" || lower === "hi" || lower === "hello" || lower === "hey") {
     return res.json({
-      reply: `Arrey Boss, deep breath lo, gussa mat hoiye! Main hamesha aapke sath hoon. Yaad rakhiye hamara ultimate target ${userProfile.deadline} hai—yeh dukan aur daily hustle temporary hai, aage pura market aur code hum dominate karenge!`,
+      reply: "Welcome Boss! Main bilkul active hoon, bataiye aaj market ya coding me kya mandate hai?",
       action
     });
   }
 
-  // 5. Code Generation (C / Python)
-  if (lower.includes("c language") || lower.includes("c me hello") || lower.includes("c code")) {
+  // 5. Capabilities ("Kya kar sakte ho")
+  if (lower.includes("kay kar sak ta") || lower.includes("kya kar sakte") || lower.includes("capabilities")) {
     return res.json({
-      reply: "Ye lijiye Boss, C language ka clean working code:\n\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello World!\\n\");\n    return 0;\n}",
+      reply: "Boss, main aapke liye C aur Python ka clean code generate kar sakta hoon, SMC/FVG market structure discuss kar sakta hoon, aur aapki 15 December ki deadline ka focus banaye rakh sakta hoon!",
       action
     });
   }
 
-  // 6. Direct Text LLM Engine (Clean Text Output, No JSON brackets)
+  // 6. Python Code Request
+  if (lower.includes("python")) {
+    return res.json({
+      reply: "Ye lijiye Boss, Python ka clean code:\n\nprint('Hello Boss, Cyrus is ready!')\n\n# Loop example\nfor i in range(1, 6):\n    print(f'Target 15 December Step: {i}')",
+      action
+    });
+  }
+
+  // 7. C Language Code Request
+  if (lower.includes("c language") || lower.includes("c code") || lower.includes("c me")) {
+    return res.json({
+      reply: "Ye lijiye Boss, C language ka clean working code:\n\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello Boss! Rudra Trader\\n\");\n    return 0;\n}",
+      action
+    });
+  }
+
+  // 8. Stress / Dukaan / Mood
+  if (lower.includes("dimag kharab") || lower.includes("thak") || lower.includes("dukan") || lower.includes("gussa")) {
+    return res.json({
+      reply: `Arrey Boss, relax ho jaiye! Ye retail dukan ka kaam temporary hai. Yaad rakhiye 15 December hamara target hai—uske baad pura focus sirf trading aur programming par hoga!`,
+      action
+    });
+  }
+
+  // 9. AI Neural Fallback via Open Brain (Mistral text pipeline)
   try {
-    const promptInstructions = `User: Rudra Trader (Boss), 15-year-old trader and programmer. Cyrus: A sharp, loyal 15-year-old male assistant who speaks energetic Hinglish and calls user Boss. Query: "${userMessage}". Reply in 1-2 sharp lines as Cyrus:`;
+    const aiUrl = `https://text.pollinations.ai/${encodeURIComponent(userMessage)}?system=${encodeURIComponent("You are Cyrus, a 15-year-old energetic sharp assistant for Boss Rudra Trader. Reply naturally in 1-2 short Hinglish sentences calling him Boss.")}&model=mistral`;
 
-    const encodedPrompt = encodeURIComponent(promptInstructions);
-    const aiResponse = await fetch(`https://text.pollinations.ai/${encodedPrompt}?model=mistral&seed=42`, {
-      method: "GET"
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 sec timeout
 
-    let reply = await aiResponse.text();
-    reply = (reply || "").trim();
+    const aiRes = await fetch(aiUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
 
-    // Agar reply me brackets ya error aaye toh use clean karein
-    if (!reply || reply.startsWith("{") || reply.includes('"error":')) {
-      throw new Error("Invalid format received");
+    let textReply = await aiRes.text();
+    textReply = (textReply || "").trim();
+
+    if (textReply && !textReply.startsWith("{") && !textReply.includes('"error":')) {
+      return res.json({ reply: textReply, action });
     }
-
-    return res.json({ reply, action });
-
-  } catch (error) {
-    // Dynamic context-aware fallback
-    let fallback = "Haan Boss! Main har waqt aapke sath hoon, chahe market analysis ho, coding ho ya koi bhi planning. Bataiye aage kya karna hai!";
-    if (lower.includes("aur kya") || lower.includes("kous nahi")) {
-      fallback = "Boss, main aapke sath live chart setups discuss kar sakta hoon, C aur Python me code likh kar de sakta hoon, aur aapki nayi planning yaad rakh sakta hoon!";
-    }
-    return res.json({ reply: fallback, action });
+  } catch (err) {
+    // handled by final dynamic reply below
   }
+
+  // Final Intelligent Contextual Reply
+  return res.json({
+    reply: "Haan Boss, main samajh raha hoon! Bataiye abhi hume kis topic ya code par aage badhna hai?",
+    action
+  });
 });
 
 app.get('/', (req, res) => {
-  res.send("Cyrus AI Cloud Brain is Online!");
+  res.send("Cyrus Rock-Solid AI Cloud Brain is Online!");
 });
 
 const PORT = process.env.PORT || 3000;
